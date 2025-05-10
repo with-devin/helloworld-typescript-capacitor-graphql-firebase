@@ -1,0 +1,46 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/hello-world-backend', './backend']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/hello-world-frontend', './frontend']
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'hello-world-backend'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/hello-world-backend'
+      - '--platform'
+      - 'managed'
+      - '--region'
+      - 'us-central1'
+      - '--allow-unauthenticated'
+      - '--set-env-vars'
+      - 'FIREBASE_PROJECT_ID=${_FIREBASE_PROJECT_ID},FIREBASE_CLIENT_EMAIL=${_FIREBASE_CLIENT_EMAIL}'
+      - '--set-secrets'
+      - 'FIREBASE_PRIVATE_KEY=firebase-private-key:latest'
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'hello-world-frontend'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/hello-world-frontend'
+      - '--platform'
+      - 'managed'
+      - '--region'
+      - 'us-central1'
+      - '--allow-unauthenticated'
+
+images:
+  - 'gcr.io/$PROJECT_ID/hello-world-backend'
+  - 'gcr.io/$PROJECT_ID/hello-world-frontend'
+
+substitutions:
+  _FIREBASE_PROJECT_ID: 'silver-courier-459401-q3'
+  _FIREBASE_CLIENT_EMAIL: 'firebase-adminsdk-xxxxx@silver-courier-459401-q3.iam.gserviceaccount.com'
