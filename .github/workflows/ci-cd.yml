@@ -1,0 +1,100 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '16'
+        cache: 'npm'
+        
+    - name: Install backend dependencies
+      run: |
+        cd backend
+        npm ci
+        
+    - name: Install frontend dependencies
+      run: |
+        cd frontend
+        npm ci
+        
+    - name: Build backend
+      run: |
+        cd backend
+        npm run build
+        
+    - name: Build frontend
+      run: |
+        cd frontend
+        npm run build
+        
+  deploy:
+    needs: build-and-test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Google Cloud SDK
+      uses: google-github-actions/setup-gcloud@v0
+      with:
+        project_id: ${{ secrets.GCP_PROJECT_ID }}
+        service_account_key: ${{ secrets.GCP_SA_KEY }}
+        export_default_credentials: true
+        
+    - name: Build and push backend Docker image
+      run: |
+        cd backend
+        gcloud builds submit --tag gcr.io/${{ secrets.GCP_PROJECT_ID }}/hello-world-backend
+        
+    - name: Deploy backend to Cloud Run
+      run: |
+        gcloud run deploy hello-world-backend \
+          --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/hello-world-backend \
+          --platform managed \
+          --region us-central1 \
+          --allow-unauthenticated \
+          --set-env-vars="FIREBASE_PROJECT_ID=${{ secrets.FIREBASE_PROJECT_ID }},FIREBASE_CLIENT_EMAIL=${{ secrets.FIREBASE_CLIENT_EMAIL }}" \
+          --set-secrets="FIREBASE_PRIVATE_KEY=firebase-private-key:latest"
+          
+    - name: Get backend URL
+      id: get-backend-url
+      run: |
+        BACKEND_URL=$(gcloud run services describe hello-world-backend --platform managed --region us-central1 --format 'value(status.url)')
+        echo "BACKEND_URL=${BACKEND_URL}/graphql" >> $GITHUB_ENV
+        
+    - name: Update frontend environment
+      run: |
+        cd frontend
+        echo "VITE_BACKEND_URL=${{ env.BACKEND_URL }}" >> .env
+        
+    - name: Build and push frontend Docker image
+      run: |
+        cd frontend
+        gcloud builds submit --tag gcr.io/${{ secrets.GCP_PROJECT_ID }}/hello-world-frontend
+        
+    - name: Deploy frontend to Cloud Run
+      run: |
+        gcloud run deploy hello-world-frontend \
+          --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/hello-world-frontend \
+          --platform managed \
+          --region us-central1 \
+          --allow-unauthenticated
+          
+    - name: Output deployment URLs
+      run: |
+        echo "Backend deployed to: ${{ env.BACKEND_URL }}"
+        FRONTEND_URL=$(gcloud run services describe hello-world-frontend --platform managed --region us-central1 --format 'value(status.url)')
+        echo "Frontend deployed to: ${FRONTEND_URL}"
