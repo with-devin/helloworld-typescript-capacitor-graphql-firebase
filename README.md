@@ -274,7 +274,7 @@ Expected response:
 
 ### Backend Dockerfile
 ```dockerfile
-FROM node:16-alpine
+FROM node:18-alpine
 
 WORKDIR /app
 
@@ -291,7 +291,7 @@ CMD ["npm", "start"]
 
 ### Frontend Dockerfile
 ```dockerfile
-FROM node:16-alpine as build
+FROM node:18-alpine as build
 
 WORKDIR /app
 
